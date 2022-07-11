@@ -28,12 +28,14 @@ public class ShopController {
 
     /**
      * 根据id查询商铺信息
+     * 加入Redis缓存的版本
      * @param id 商铺id
      * @return 商铺详情数据
      */
     @GetMapping("/{id}")
     public Result queryShopById(@PathVariable("id") Long id) {
-        return Result.ok(shopService.getById(id));
+        //TODO 从redis中返回，尚未完成
+        return Result.ok();
     }
 
     /**
