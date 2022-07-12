@@ -42,16 +42,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    @Resource
-    private RedisTemplate redisTemplate;
-
     public User createUserWithPhone(String phone){
         User user = new User();
         user.setPhone(phone);
         user.setCreateTime(LocalDateTime.now());
         user.setNickName(USER_NICK_NAME_PREFIX + RandomUtil.randomString(10));
         save(user);
-        long userid = user.getId();
         return user;
     }
 
