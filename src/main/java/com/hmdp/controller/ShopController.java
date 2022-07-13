@@ -34,7 +34,7 @@ public class ShopController {
      */
     @GetMapping("/{id}")
     public Result queryShopById(@PathVariable("id") Long id) {
-        //从redis中返回，尚未完成
+        //从redis中返回
         return shopService.queryById(id);
     }
 
@@ -59,7 +59,7 @@ public class ShopController {
     @PutMapping
     public Result updateShop(@RequestBody Shop shop) {
         // 写入数据库
-        shopService.updateById(shop);
+        shopService.updateShopWithCache(shop);
         return Result.ok();
     }
 

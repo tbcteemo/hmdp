@@ -10,8 +10,10 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisConstants;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IShopService {
@@ -22,6 +24,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Resource
     private IShopService shopService;
 
+    @Resource
+    private ShopMapper shopMapper;
     @Override
     public Result queryById(Long id) {
         String key = RedisConstants.CACHE_SHOP_KEY + id;
@@ -36,8 +40,25 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         if (shop == null) {
             return Result.fail("店铺不存在");
         }
-        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop));
+        stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop),RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
         return Result.ok(shop);
+    }
+
+    @Override
+    @Transactional
+    public Result updateShopWithCache(Shop shop) {
+        Long id = shop.getId();
+        if (id == null){
+            return Result.fail("id不能为空");
+        }
+//        1. 更新数据库
+//         注意：小知识点，使用MybatisPlus时，service和mapper都有updateById这个方法。
+//         但是，前者返回的是boolean操作是否成功，后者返回的是int，操作了多少条。
+        updateById(shop);
+//        2.删除缓存；
+        stringRedisTemplate.delete(RedisConstants.CACHE_SHOP_KEY + id);
+//        3.返回成功信息；
+        return Result.ok("更新成功");
     }
 }
 
