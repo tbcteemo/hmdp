@@ -34,8 +34,8 @@ public class ShopController {
      */
     @GetMapping("/{id}")
     public Result queryShopById(@PathVariable("id") Long id) {
-        //TODO 从redis中返回，尚未完成
-        return Result.ok();
+        //从redis中返回，尚未完成
+        return shopService.queryById(id);
     }
 
     /**
