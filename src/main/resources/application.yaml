@@ -11,13 +11,15 @@ spring:
   redis:
     host: 146.56.199.132
     port: 6379
-    password: 996529
+#    password: 996529
+    Auth: 996529
     lettuce:
       pool:
         max-active: 10
         max-idle: 10
         min-idle: 1
         time-between-eviction-runs: 10s
+    timeout: 360
   jackson:
     default-property-inclusion: non_null # JSON处理时忽略非空字段
 mybatis-plus:

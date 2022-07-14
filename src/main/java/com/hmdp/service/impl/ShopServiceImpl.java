@@ -36,8 +36,15 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             Shop shop = JSONUtil.toBean(shopJson, Shop.class);
             return Result.ok(shop);
         }
+
+//        在Redis中，如果是空值也会被isNotBlank方法判定为false，进入执行查数据库的流程。所以此处要加入空值判断。
+        if (shopJson != null){
+            return Result.fail("店铺不存在");
+        }
         Shop shop = shopService.getById(id);
         if (shop == null) {
+//            Cache和DB都没有的数据，则做一个空值到Redis中，防止缓存穿透。
+            stringRedisTemplate.opsForValue().set(key,"",RedisConstants.CACHE_NULL_TTL,TimeUnit.MINUTES);
             return Result.fail("店铺不存在");
         }
         stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop),RedisConstants.CACHE_SHOP_TTL, TimeUnit.MINUTES);
