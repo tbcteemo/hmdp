@@ -9,11 +9,14 @@ import com.hmdp.mapper.ShopMapper;
 import com.hmdp.service.IShopService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisConstants;
+import com.hmdp.utils.RedisData;
+import com.hmdp.utils.SimpleThreadPool;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
+import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -92,7 +95,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return shop;
     }
 
-    /** 简易互斥锁解决缓存击穿的根据id查询 */
+    /** 简易互斥锁解决缓存击穿的根据id查询方法 */
     public Shop queryByIdWithMutex(Long id){
         String key = RedisConstants.CACHE_SHOP_KEY + id;
 //        1.查询Redis中是否存在；
@@ -132,5 +135,59 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
         return shop;
     }
+
+    /** 给数据设置逻辑过期时间到Redis中,使用RedisData类实现 */
+    public void saveToRedisWithLogicalExpire(Long id, Long expiredSeconds){
+        Shop shop = getById(id);
+        RedisData redisData = new RedisData<Shop>();
+        redisData.setData(shop);
+        redisData.setExpireTime(LocalDateTime.now().plusSeconds(expiredSeconds));
+        stringRedisTemplate.opsForValue().set(RedisConstants.CACHE_SHOP_KEY + id,JSONUtil.toJsonStr(redisData));
+    }
+
+    /** 使用逻辑过期解决缓存击穿问题 */
+    public Shop queryByIdWithLogicalExpire(Long id){
+//        1.从Redis中获取缓存
+        String key = RedisConstants.CACHE_SHOP_KEY + id;
+//        2.判断在Redis中是否存在，不存在则返回null，存在则进入过期判断
+        String shopJson = stringRedisTemplate.opsForValue().get(key);
+//        为什么Redis中不存在就直接返回null，而不是查数据库呢？因为在缓存击穿中，热点key往往是在预热中手动存入Redis的，如果没有说明就不是热点key。
+//        如果不存在就直接进行查库，那就是直接被击穿了，做这些方法就失去了意义。
+//        3.不存在，查询未命中，返回null
+        if (StrUtil.isBlank(shopJson)) {
+            return null;
+        }
+//        4.命中，需要先把json反序列化
+        RedisData<Shop> redisData = JSONUtil.toBean(shopJson,RedisData.class);
+        Shop shop = redisData.getData();
+        LocalDateTime expireTime = redisData.getExpireTime();
+//        5.判断是否过期
+//        5.1 没有过期，直接返回对象
+        if (expireTime.isAfter(LocalDateTime.now())){
+            return shop;
+        }
+//        5.2 已经过期，则进入缓存重建。
+//        6.缓存重建
+//        6.1获取简易互斥锁
+        String lockKey = RedisConstants.LOCK_SHOP_KEY + id;
+        boolean getLock = tryLock(lockKey);
+//        6.2 判断锁是否获取成功
+        if (getLock == true){
+//            6.3 成功，则开启独立线程，实现缓存重建
+            SimpleThreadPool.CACHE_REBUILD_EXECUTOR.submit(() -> {
+                //重建缓存
+                try {
+                    this.saveToRedisWithLogicalExpire(id, 1800L);
+                }catch (Exception e){
+                    throw new RuntimeException(e);
+                }finally {
+                    //释放锁
+                    unlock(lockKey);
+                }
+            });
+        }
+        return shop;
+    }
+
 }
 
